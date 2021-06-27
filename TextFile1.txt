@@ -1,0 +1,320 @@
+﻿Using System
+Using System.Collections
+Using System.Text
+Using System.IO 
+
+BegClass Program
+    BegEnum ExitCode Access(*Public) 
+        DclEnumFld Success Value(0) 
+        DclEnumFld Failure Value(1) 
+    EndEnum 
+
+    BegFunc Main Type(*Integer4) Shared(*Yes) Access(*Public) Attributes(System.STAThread())
+        DclSrParm args Type(*String) Rank(1)
+
+        LeaveSr CodeRunner(args) 
+    EndFunc 
+            
+    BegFunc CodeRunner Type(*Integer4) Shared(*Yes) Access(*Public)
+        DclSrParm args Type(*String) Rank(1)
+
+        DclFld Export Type(Exporter)
+        DclFld exportArgs Type(ExporterArgs) New()
+        DclFld ElapsedMilliseconds Type(*Integer4)  
+        DclFld CurrentForeGroundColor Type(ConsoleColor) 
+
+        CurrentForeGroundColor = Console.ForegroundColor
+
+        If args.Length < 3 OR Array.IndexOf(args, '-help') > -1
+            ShowHelp()
+            LeaveSr ExitCode.Failure
+        EndIf 
+
+        ExportArgs.DatabaseName = args[0]
+        ExportArgs.LibraryName = args[1]
+        ExportArgs.FileName = args[2]
+
+        ExportArgs.OutputDirectory = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments)        
+        // See if args[3] specifies an existing output directory. 
+        If args.Length > 3 AND NOT args[3].StartsWith('-') 
+            If args[3].EndsWith('\') 
+                args[3] = Utils.RemoveLastCharacter(args[3])
+            EndIf 
+            If System.IO.Directory.Exists(args[3]) 
+                ExportArgs.OutputDirectory = args[3]    
+            Else 
+                Console.ForegroundColor = ConsoleColor.Red
+                Console.WriteLine('{0} output directory not found', args[3]) 
+                Console.ForegroundColor = CurrentForeGroundColor
+                LeaveSr ExitCode.Failure
+            EndIf 
+        EndIf 
+        ExportArgs.IncludeHeading = Array.IndexOf(args, '-noheadings') = -1
+        ExportArgs.ShowProgress = Array.IndexOf(args, '-showprogress') > -1
+        ExportArgs.TabDelimiter = Array.IndexOf(args, '-tabdelimiter') > -1
+        ExportArgs.WriteSchemaFile = Array.IndexOf(args, '-writeschemafile') > -1
+
+        Export = *New Exporter(ExportArgs)
+
+        Try
+            ElapsedMilliseconds = Export.Run()
+            Console.ForegroundColor = ConsoleColor.Green
+            Console.WriteLine('Time to export: {0:#,###}ms {1:#,##0}min', ElapsedMilliseconds, ElapsedMilliseconds / 60000)
+            Console.ForegroundColor = CurrentForeGroundColor
+            LeaveSr ExitCode.Success
+        Catch ex Type(System.Exception)
+            Console.ForegroundColor = ConsoleColor.Red
+            Console.WriteLine(ex.Message) 
+            Console.ForegroundColor = CurrentForeGroundColor
+            LeaveSr ExitCode.Failure
+        EndTry      
+    EndFunc
+
+    BegSr ShowHelp Shared(*Yes) 
+        DclFld CurrentForeGroundColor Type(ConsoleColor) 
+
+        CurrentForeGroundColor = Console.ForegroundColor
+        Console.ForegroundColor = ConsoleColor.Green
+        Console.WriteLine('Export a DataGate file to either a comma- or tab-separated file.')
+        Console.WriteLine('')
+        Console.WriteLine('Usage:')
+        Console.WriteLine('   exporttocsv <databaseName> <library> <file> <outputPath> -noheadings -showprogress -tabdelimiter -writeschemafile')
+        Console.WriteLine('')
+        Console.WriteLine('Required arguments--must be provided in the order shown')
+        Console.WriteLine('    <databaseName>......ASNA Database Name. If the name includes blanks surround it with double quotes.')
+        Console.WriteLine('    <library>...........Library name.')
+        Console.WriteLine('    <file>..............File name.')
+        Console.WriteLine('')
+        Console.WriteLine('Optional arguments')
+        Console.WriteLine('    <outputPath>........Path to which output files are written. If provided, this must be the fourth') 
+        Console.WriteLine('                        argument. The default output path is the current user''s ''Documents'' folder.')
+        Console.WriteLine('')
+        Console.WriteLine('Optional flags--flags can be provided in any order')
+        Console.WriteLine('    -help...............Show this help.')
+        Console.WriteLine('    -noheadings.........Do not include field names as first row.')
+        Console.WriteLine('    -showprogress.......Show progress as records are exported.')
+        Console.WriteLine('    -tabdelimiter.......Delimit fields with a tab character instead of a comma.')
+        Console.WriteLine('    -writeschemafile....Write schema file which shows column data types.')
+        Console.WriteLine('')
+        Console.WriteLine('Output file is written to the target folder in the format:')
+        Console.WriteLine('    <databaseName>-<library>-<file>.txt')
+        Console.WriteLine('')
+        Console.WriteLine('Schema file is written to the target folder in the format:')
+        Console.WriteLine('    <databaseName>-<library>-<file>.schema.txt')
+        Console.WriteLine('')
+        Console.WriteLine('In the output file, the Database Name has any special characters removed to make it work as part of a Windows filename.')  
+        Console.WriteLine('For example, "*PUBLIC/DG Net Local" gets translated to "public_dg_net_local" in the output file name.')
+
+        Console.ForegroundColor = CurrentForeGroundColor
+    EndSr 
+EndClass
+
+BegClass Exporter Access(*Public) 
+    DclConst TAB Value(U'0009') Access(*Public)   
+    DclConst COMMA Value(',') 
+
+    DclDB DGDB 
+    // DclFld APIDGDB Type(ASNA.DataGate.Client.AdgConnection) 
+    DclFld DatabaseName Type(*String) 
+    DclFld LibraryName Type(*String) 
+    DclFld FileName  Type(*String) 
+    DclFld OutputDirectory Type(*String) 
+    DclFld IncludeHeadingFlag Type(*Boolean) 
+    DclFld ShowProgressFlag Type(*Boolean) 
+    DclFld WriteSchemaFileFlag Type(*Boolean) 
+    DclFld Delimiter Type(*String) 
+    DclFld OriginalForeGroundColor Type(ConsoleColor) 
+
+    DclFld dgfr Type(DGFileReader) WithEvents(*Yes) 
+    
+    DclFld outfileStream Type(System.IO.StreamWriter)
+    DclFLd outputFileName Type(*String)
+    DclFld outputSchemaFileName Type(*String) 
+
+    BegConstructor Access(*Public) 
+        DclSrParm ExportArgs Type(ExporterArgs) 
+
+        DclFld LibraryNameForOutputFile Type(*String) 
+        
+        *This.DatabaseName = ExportArgs.DatabaseName 
+        *This.LibraryName = ExportArgs.LibraryName
+        *This.FileName = ExportArgs.FileName  
+        *This.OutputDirectory = ExportArgs.OutputDirectory 
+        *This.IncludeHeadingFlag = ExportArgs.IncludeHeading
+        *This.ShowProgressFlag = ExportArgs.ShowProgress
+        *This.WriteSchemaFileFlag = ExportArgs.WriteSchemaFile
+
+        *This.OriginalForegroundColor = Console.ForegroundColor
+
+        If ExportArgs.TabDelimiter 
+            *This.Delimiter = TAB 
+        Else
+            *This.Delimiter = COMMA
+        EndIf 
+       
+        If LibraryName = '\' OR LibraryName = '/'
+            LibraryNameForOutputFile = '#root'
+        Else
+            LibraryNameForOutputFile = LibraryName 
+        EndIf 
+
+        *This.OutputFileName = String.Format('{0}\{1}_{2}_{3}.txt', +
+                                  *This.OutputDirectory, +
+                                  Utils.NormalizeDatabaseName(*This.DatabaseName), +
+                                  LibraryNameForOutputFile, +
+                                  FileName)
+
+        *This.OutputSchemaFileName = String.Format('{0}\{1}_{2}_{3}.schema.txt', +
+                                     *This.OutputDirectory, +
+                                     Utils.NormalizeDatabaseName(*This.DatabaseName), +
+                                     LibraryNameForOutputFile, +
+                                     FileName)
+
+    EndConstructor 
+
+    BegSr RestoreForegroundColor 
+        Console.ForegroundColor = *This.OriginalForeGroundColor
+    EndSr
+    
+    BegFunc Run Access(*Public) Type(*Integer4)  
+        //APIDGDB = *New  ASNA.DataGate.Client.AdgConnection(*This.DatabaseName) 
+        //APIDGDB.Open()
+        DclFld TimeNow Type(DateTime) 
+
+        DGDB.DBName = *This.DatabaseName 
+        Connect DGDB 
+
+        // Use one or the other. 
+        // C# uses this one.
+        //dgfr = *New DataGateHelper(APIDGDB, 500)
+
+        // AVR uses this one.
+        *This.dgfr = *New DGFileReader(DGDB, 500)
+
+        *This.dgfr.ReadEntireFile(*This.LibraryName, *This.Filename) 
+        *This.outfileStream.Close()
+        *This.outfileStream.Dispose()
+
+        TimeNow = DateTime.Now()
+
+        Console.ForegroundColor = ConsoleColor.Green
+
+        Console.WriteLine(String.Format('Exported {0}\{1}\{2}', +
+                    *This.DatabaseName, +
+                    *This.LibraryName, +
+                    *This.FileName))
+        Console.WriteLine('{0} created on {1}.', *This.OutputFileName, TimeNow.ToString('f')) 
+        Console.WriteLine('{0:#,000} rows written.', dgfr.TotalRowsCounter)
+        RestoreForegroundColor()
+
+        Disconnect DGDB
+        //APIDGDB.Close()
+
+        LeaveSr dgfr.ReadMilliseconds    
+    EndFunc 
+
+    BegSr OnAfterRowRead Event(dgfr.AfterRowRead) 
+        DclSrParm Sender Type(*Object)
+        DclSrParm e Type(AfterRowReadArgs) 
+
+        // Properties passed in through the e parameter:
+        //   e.DataRow -- a System.Data.DataRow representing the row read.
+        //   e.FieldNames -- an array of field names in the DataRow.
+        //   e.FieldTypes -- an array of field types in the DataRow.
+        //   e.CurrentRowCounter -- The current row number. 
+        //   e.TotalRowsCounter -- the total row numbers. 
+
+        DclFld ExportLine Type(StringBuilder) New()
+        DclFld Counter Type(*Integer4) 
+
+        Console.ForegroundColor = ConsoleColor.Green
+
+        // Create schema file and export headings. 
+        If e.CurrentRowCounter = 1
+            // This seems like a silly place to do this, but if you do it earlier 
+            // a spurious output file is written if a library or file is not found. 
+            *This.outfileStream = *New System.IO.StreamWriter(*This.OutputFileName)
+
+            If *This.WriteSchemaFileFlag
+                WriteSchemaFile(e.FieldNames, e.FieldTypes)
+            EndIf 
+            If *This.IncludeHeadingFlag
+                WriteColumnHeadings(e.FieldNames)
+            EndIf 
+        EndIf 
+
+        // Export row data. 
+        ForEach FieldName Type(*String) Collection(e.FieldNames)
+            If e.FieldTypes[Counter].ToLower() = 'string' 
+                ExportLine.Append(String.Format('"{0}"{1}', e.DataRow[FieldName].ToString().Trim(), *This.Delimiter))
+            Else
+                ExportLine.Append(String.Format("{0}{1}", e.DataRow[FieldName].ToString(), *This.Delimiter))
+            EndIf 
+            Counter += 1
+        EndFor 
+
+        // Show Progress.             
+        If *This.ShowProgressFlag AND Utils.Mod(e.CurrentRowCounter, 500)            
+            ShowProgress(e.CurrentRowCounter, e.TotalRowsCounter)
+        EndIf
+
+        *This.outfileStream.WriteLine(Utils.RemoveLastCharacter(ExportLine.ToString())) 
+
+        RestoreForegroundColor()
+    EndSr
+
+    BegSr WriteColumnHeadings
+        DclSrParm FieldNames Type(*String) Rank(1) 
+
+        DclFld ExportLine Type(StringBuilder) New()
+        
+        ForEach FieldName Type(*String) Collection(FieldNames)
+            ExportLine.Append(String.Format('{0}{1}', FieldName, *This.Delimiter))
+        EndFor         
+        ExportLine = ExportLine.Remove(ExportLine.Length - 1, 1)
+        *This.outfileStream.WriteLine(ExportLine)
+    EndSr 
+
+    BegSr ShowProgress
+        DclSrParm CurrentRowCounter Type(*Integer4) 
+        DclSrParm TotalRowsCounter Type(*Integer8) 
+
+        DclFld CursorLeft Type(*Integer4) 
+        DclFld CursorTop Type(*Integer4) 
+
+        CursorLeft = Console.CursorLeft
+        CursorTop = Console.CursorTop
+        Console.WriteLine('{0} of {1}', CurrentRowCounter, TotalRowsCounter) 
+        Console.CursorLeft = CursorLeft
+        Console.CursorTop = CursorTop                        
+    EndSr
+
+    BegSr WriteSchemaFile
+        DclSrParm FieldNames Type(*String) Rank(1) 
+        DclSrParm FieldTypes Type(*String) Rank(1) 
+
+        DclFld outfileStream Type(System.IO.StreamWriter)
+        DclFld ColumnCounter Type(*Integer4) 
+        
+        outfileStream = *New System.IO.StreamWriter(*This.outputSchemaFileName)
+        outfileStream.WriteLine('{0,-24}{1}', 'Column name', 'Data type') 
+        outfileStream.WriteLine('{0,-24}{1}', '-----------', '---------') 
+        ForEach FieldName Type(*String) Collection(FieldNames)
+            outfileStream.WriteLine(String.Format('{0,-24}{1}', FieldName, FieldTypes[ColumnCounter]))
+            ColumnCounter += 1 
+        EndFor         
+
+        outfileStream.Dispose()
+    EndSr
+EndClass
+
+BegClass ExporterArgs Access(*Public)
+    DclProp DatabaseName Type(*String) Access(*Public)
+    DclProp LibraryName Type(*String)  Access(*Public)
+    DclProp FileName  Type(*String) Access(*Public)
+    DclProp OutputDirectory Type(*String)  Access(*Public)
+    DclProp IncludeHeading Type(*Boolean)  Access(*Public)
+    DclProp ShowProgress Type(*Boolean)  Access(*Public)
+    DclProp TabDelimiter Type(*Boolean)  Access(*Public)
+    DclProp WriteSchemaFile Type(*Boolean)  Access(*Public)
+EndClass
