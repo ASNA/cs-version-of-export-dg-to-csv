@@ -2,7 +2,7 @@
 using System.Linq;
 using System.Text;
 using ASNA.DataGateHelper;
-using System.Threading;
+using System.Reflection;
 
 namespace ExportDGFileToCSV
 {
@@ -68,6 +68,12 @@ namespace ExportDGFileToCSV
             exportArgs.TabDelimiterFlag = Array.IndexOf(args, "-tabdelimiter") > -1;
             exportArgs.WriteSchemaFileFlag = Array.IndexOf(args, "-writeschemafile") > -1;
 
+            getFlagValue(args, exportArgs, "BlockingFactor", "-blockingfactor");  
+            if (exportArgs.BlockingFactor != ExporterArgs.DEFAULT_BLOCKING_FACTOR)
+            {
+                Console.WriteLine("BlockingFactor overridden to {0}", exportArgs.BlockingFactor); 
+            }
+
             Exporter export = new Exporter(exportArgs);
 
             try
@@ -84,6 +90,56 @@ namespace ExportDGFileToCSV
                 Console.WriteLine(ex.Message);
                 Console.ForegroundColor = OriginalForegroundColor;
                 return (int)ExitCode.Failure;
+            }
+        }
+
+        static void getFlagValue(string[] args, ExporterArgs exportArgs, string propertyName, string flagName)
+        {
+            if (Array.IndexOf(args, flagName) == -1) {
+                return;
+            }
+
+            Type type = exportArgs.GetType();
+            PropertyInfo prop = type.GetProperty(propertyName);
+            
+            int flagIndex = Array.IndexOf(args, flagName);
+            if (flagIndex == args.Length - 1)
+            {
+                Console.WriteLine("The value for {0} was not provided", flagName);
+                Environment.Exit((int)(ExitCode.Failure));
+            }
+            if (flagIndex > 0 && flagIndex <= args.Length - 1)
+            {
+                string flagValue = args[flagIndex + 1];
+                if (flagValue.StartsWith("-"))
+                {
+                    Console.WriteLine("The value for {0} was not provided", flagName);
+                    Environment.Exit((int)(ExitCode.Failure));
+                }
+
+                if (prop.PropertyType.Name == "Int32") {
+                    if (flagValue.All(char.IsDigit))
+                    {
+                        prop.SetValue(exportArgs, Int32.Parse(flagValue), null);
+                        return;    
+                    }
+                    else
+                    {
+                        Console.WriteLine("The value for {0} must be a number", flagName);
+                        Environment.Exit((int)(ExitCode.Failure));
+                    }
+                }
+                
+                if (prop.PropertyType.Name == "String")
+                {
+                    prop.SetValue(exportArgs, flagValue, null);
+                    return;
+                }
+            }
+            else
+            {
+                Console.WriteLine("The value for {0} is not provided.", flagName);
+                Environment.Exit((int)(ExitCode.Failure));
             }
         }
 
@@ -110,6 +166,8 @@ namespace ExportDGFileToCSV
             Console.WriteLine("    -showprogress.......Show progress as records are exported.");
             Console.WriteLine("    -tabdelimiter.......Delimit fields with a tab character instead of a comma.");
             Console.WriteLine("    -writeschemafile....Write schema file which shows column data types.");
+            Console.WriteLine("    -blockingfactor.....Record blocking factor. Setting this to a value between 500-1000 _may_ help performance.");
+            Console.WriteLine("                        A values higher than 1000 will likely impede performance. The default value is 500.");
             Console.WriteLine("");
             Console.WriteLine("Output file is written to the target folder in the format:");
             Console.WriteLine("    <databaseName>-<library>-<file>.txt");
@@ -125,7 +183,6 @@ namespace ExportDGFileToCSV
     }
 
     public class Exporter {
-
         ASNA.DataGateHelper.DGFileReader dgfr;
         ConsoleColor OriginalForeGroundColor = Console.ForegroundColor;
 
@@ -145,7 +202,7 @@ namespace ExportDGFileToCSV
         public int Run()
         {
             ASNA.DataGate.Client.AdgConnection apiDGDB = new ASNA.DataGate.Client.AdgConnection("*Public/DG NET Local");
-            dgfr = new ASNA.DataGateHelper.DGFileReader(apiDGDB, 500);
+            dgfr = new ASNA.DataGateHelper.DGFileReader(apiDGDB, this.exportArgs.BlockingFactor);
             dgfr.AfterRowRead += OnAfterRowRead;
 
             this.dgfr.ReadEntireFile("examples", "cmastnew");
@@ -250,6 +307,8 @@ namespace ExportDGFileToCSV
 
     public class ExporterArgs
     {
+        public const int DEFAULT_BLOCKING_FACTOR = 500;
+
         public string DatabaseName { get; set; }
         public string LibraryName { get; set; }
         public string FileName { get; set; }
@@ -258,12 +317,18 @@ namespace ExportDGFileToCSV
         public bool ShowProgressFlag { get; set; }
         public bool TabDelimiterFlag { get; set; }
         public bool WriteSchemaFileFlag { get; set; }
+        public int BlockingFactor { get; set; }
         public string LibraryNameForOutputFile { get; set; }
         public string OutputFileName { get; set; }
         public string OutputSchemaFileName { get; set; }
         public string Delimiter { get; set; }
 
         public System.IO.StreamWriter outfileStream;
+
+        public ExporterArgs()
+        {
+            this.BlockingFactor = DEFAULT_BLOCKING_FACTOR;
+        }
         public void TransformExportArgs()
         {
             const string TAB = "\t";
