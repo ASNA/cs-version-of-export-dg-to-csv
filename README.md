@@ -39,4 +39,6 @@ Export a DataGate file to either a comma- or tab-separated file.
         <databaseName>-<library>-<file>.schema.txt
 
     In the output file, the Database Name has any special characters removed to 
-    make it work as part of a Windows filename. For example, `*PUBLIC/DG Net Local` gets translated to `public_dg_net_local` in the output file name.
+    make it work as part of a Windows filename. For example, 
+    `*PUBLIC/DG Net Local` gets translated to `public_dg_net_local` in the
+     output file name.
