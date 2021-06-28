@@ -7,7 +7,9 @@ While not an exact port, this is essentially a C# version of the AVR repo [you c
 Export a DataGate file to either a comma- or tab-separated file.
  
     Usage:
-    exporttocsv <databaseName> <library> <file> <outputPath> -noheadings -showprogress -tabdelimiter -writeschemafile
+    exporttocsv <databaseName> <library> <file> 
+                <outputPath> -noheadings -showprogress 
+                -tabdelimiter -writeschemafile
 
     Required arguments--must be provided in the order shown
         <databaseName>......ASNA Database Name. If the name includes blanks surround it with double quotes.
@@ -36,5 +38,5 @@ Export a DataGate file to either a comma- or tab-separated file.
     Schema file is written to the target folder in the format:
         <databaseName>-<library>-<file>.schema.txt
 
-    In the output file, the Database Name has any special characters removed to make it work as part of a Windows filename.
-    For example, '*PUBLIC/DG Net Local' gets translated to 'public_dg_net_local' in the output file name.
+    In the output file, the Database Name has any special characters removed to 
+    make it work as part of a Windows filename. For example, `*PUBLIC/DG Net Local` gets translated to `public_dg_net_local` in the output file name.
