@@ -25,8 +25,8 @@ namespace ExportDGFileToCSV
             int result;
             result = CodeRunner(args);
 
-            Console.WriteLine("Press any key to continue...");
-            Console.ReadKey();
+            //Console.WriteLine("Press any key to continue...");
+            //Console.ReadKey();
 
             return result;
         }
@@ -186,6 +186,7 @@ namespace ExportDGFileToCSV
             Console.WriteLine("    -writeschemafile....Write schema file which shows column data types.");
             Console.WriteLine("    -blockingfactor.....Record blocking factor. Setting this to a value between 500-1000 _may_ help performance.");
             Console.WriteLine("                        A values higher than 1000 will likely impede performance. The default value is 500.");
+            Console.WriteLine("    Any other flags entered are ignored.");
             Console.WriteLine("");
             Console.WriteLine("Output file is written to the target folder in the format:");
             Console.WriteLine("    <databaseName>-<library>-<file>.txt");
