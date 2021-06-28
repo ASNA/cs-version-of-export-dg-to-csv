@@ -108,6 +108,12 @@ namespace ExportDGFileToCSV
                 Console.WriteLine("The value for {0} was not provided", flagName);
                 Environment.Exit((int)(ExitCode.Failure));
             }
+
+            // shouldn't the test below be:
+            // if (flagIndex == args.Length -1)
+            // if you this far, flagIndex has zero or greater. 
+            // You're only looking for the the flag being the last command line arg. 
+
             if (flagIndex > 0 && flagIndex <= args.Length - 1)
             {
                 string flagValue = args[flagIndex + 1];
@@ -368,9 +374,5 @@ namespace ExportDGFileToCSV
         {
             this.outfileStream.Dispose();
         }
-
     }
-
-
-
 }
