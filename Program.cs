@@ -13,7 +13,11 @@ namespace ExportDGFileToCSV
         enum ExitCode : int
         {
             Success = 0,
-            Failure = 1
+            Failure = 1,
+            ValueMustBeANumber = 3,
+            ValueNotProvided = 4,
+            FlagNotPresent = 5,
+            UndeterminedError = 99
         }
 
         static int Main(string[] args)
@@ -39,6 +43,8 @@ namespace ExportDGFileToCSV
                 showHelp();
                 return (int)ExitCode.Failure;
             }
+
+            ExitCode result;
 
             ExporterArgs exportArgs = new ExporterArgs();
             exportArgs.DatabaseName = args[DATABASENAME];
@@ -68,10 +74,16 @@ namespace ExportDGFileToCSV
             exportArgs.TabDelimiterFlag = Array.IndexOf(args, "-tabdelimiter") > -1;
             exportArgs.WriteSchemaFileFlag = Array.IndexOf(args, "-writeschemafile") > -1;
 
-            getFlagValue(args, exportArgs, "BlockingFactor", "-blockingfactor");  
+            result = getFlagValue(args, exportArgs, "BlockingFactor", "-blockingfactor");  
+            if (result != ExitCode.Success && result != ExitCode.FlagNotPresent) {
+                ShowCmdLineParseError(result, "-blockingfactor");
+                return (int)ExitCode.Failure;
+            }
             if (exportArgs.BlockingFactor != ExporterArgs.DEFAULT_BLOCKING_FACTOR)
             {
-                Console.WriteLine("BlockingFactor overridden to {0}", exportArgs.BlockingFactor); 
+                Console.ForegroundColor = ConsoleColor.Green;
+                Console.WriteLine("BlockingFactor overridden to {0}", exportArgs.BlockingFactor);
+                Console.ForegroundColor = OriginalForegroundColor;
             }
 
             Exporter export = new Exporter(exportArgs);
@@ -93,60 +105,60 @@ namespace ExportDGFileToCSV
             }
         }
 
-        static void getFlagValue(string[] args, ExporterArgs exportArgs, string propertyName, string flagName)
+        static ExitCode getFlagValue(string[] args, ExporterArgs exportArgs, string propertyName, string flagName)
         {
-            if (Array.IndexOf(args, flagName) == -1) {
-                return;
-            }
-
-            Type type = exportArgs.GetType();
-            PropertyInfo prop = type.GetProperty(propertyName);
-            
             int flagIndex = Array.IndexOf(args, flagName);
-            if (flagIndex == args.Length - 1)
+            int valueIndex = flagIndex + 1;
+
+            if (Array.IndexOf(args, flagName) == -1) return ExitCode.FlagNotPresent;
+            if (valueIndex >= args.Length) return ExitCode.ValueNotProvided;
+            if (args[valueIndex].StartsWith("-")) return ExitCode.ValueNotProvided;
+
+            string flagValue = args[valueIndex];
+            Type type = exportArgs.GetType();
+
+            PropertyInfo prop = type.GetProperty(propertyName);
+            if (prop == null) throw new System.ArgumentException("Property {0} doesn't exist in ExporterArgs", propertyName);
+
+            switch (prop.PropertyType.Name)
             {
-                Console.WriteLine("The value for {0} was not provided", flagName);
-                Environment.Exit((int)(ExitCode.Failure));
-            }
-
-            // shouldn't the test below be:
-            // if (flagIndex == args.Length -1)
-            // if you this far, flagIndex has zero or greater. 
-            // You're only looking for the the flag being the last command line arg. 
-
-            if (flagIndex > 0 && flagIndex <= args.Length - 1)
-            {
-                string flagValue = args[flagIndex + 1];
-                if (flagValue.StartsWith("-"))
-                {
-                    Console.WriteLine("The value for {0} was not provided", flagName);
-                    Environment.Exit((int)(ExitCode.Failure));
-                }
-
-                if (prop.PropertyType.Name == "Int32") {
+                case "Int32":
                     if (flagValue.All(char.IsDigit))
                     {
                         prop.SetValue(exportArgs, Int32.Parse(flagValue), null);
-                        return;    
+                        return ExitCode.Success;
                     }
-                    else
-                    {
-                        Console.WriteLine("The value for {0} must be a number", flagName);
-                        Environment.Exit((int)(ExitCode.Failure));
-                    }
-                }
-                
-                if (prop.PropertyType.Name == "String")
-                {
-                    prop.SetValue(exportArgs, flagValue, null);
-                    return;
-                }
+                    return ExitCode.ValueMustBeANumber;
+
+                case "String":
+                    prop.SetValue(exportArgs, Int32.Parse(flagValue), null);
+                    return ExitCode.Success;
             }
-            else
+
+            return ExitCode.UndeterminedError;
+        }
+
+        static void ShowCmdLineParseError(ExitCode result, string flagName)
+        {
+            Console.ForegroundColor = ConsoleColor.Red;
+
+            switch (result)
             {
-                Console.WriteLine("The value for {0} is not provided.", flagName);
-                Environment.Exit((int)(ExitCode.Failure));
+                case ExitCode.FlagNotPresent:
+                    Console.WriteLine("{0} flag not present.", flagName);
+                    break;
+                case ExitCode.UndeterminedError:
+                    Console.WriteLine("An undetermined error occurred parsing the {0} flag.", flagName);
+                    break;
+                case ExitCode.ValueMustBeANumber:
+                    Console.WriteLine("The value for the {0} flag must be a number", flagName);
+                    break;
+                case ExitCode.ValueNotProvided:
+                    Console.WriteLine("The value for the {0} flag was not provided", flagName);
+                    break;
             }
+            Console.ForegroundColor = OriginalForegroundColor;
+
         }
 
         static void showHelp()
