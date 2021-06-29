@@ -19,8 +19,7 @@ Export a DataGate file to either a comma- or tab-separated file.
         <file>..............File name.
 
     Optional arguments
-        <outputPath>........Path to which output files are written. If provided, this must be the fourth
-                            argument. The default output path is the current user's 'Documents' folder.
+        <outputPath>........Path to which output files are written. If provided, this must be the fourth argument. The default output path is the current user's 'Documents' folder.
 
     Optional flags--flags can be provided in any order
         -help...............Show this help.
