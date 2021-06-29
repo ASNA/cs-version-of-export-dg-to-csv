@@ -1,15 +1,17 @@
-### Export a file to CSV with C#
+### Export a DataGate file to CSV with C#
 
-This program exports a file to a CSV comma-separated text file.  It uses the `DGFileReader` class [available here.](https://github.com/ASNA/ASNA.DataGateHelper) 
+This C# program exports a file to a CSV comma-separated text file. It  uses the [`DGFileReader`](https://github.com/ASNA/ASNA.DataGateHelper) class to read the file it exports. 
 
-While not an exact port, this is essentially a C# version of the AVR repo [you can find.](https://github.com/ASNA/avr-version-of-export-dg-to-csv) 
+>[See the ASNA Visual RPG version of this example](https://github.com/ASNA/avr-version-of-export-dg-to-csv). 
+
+>[See the repo that provides the DGFileReader ](https://github.com/ASNA/ASNA.DataGateHelper). This repo's README provides more technical detail.
 
 Export a DataGate file to either a comma- or tab-separated file.
  
     Usage:
     exporttocsv <databaseName> <library> <file> 
                 <outputPath> -noheadings -showprogress 
-                -tabdelimiter -writeschemafile
+                -tabdelimiter -writeschemafile -blockingfactor nnn
 
     Required arguments--must be provided in the order shown
         <databaseName>......ASNA Database Name. If the name includes blanks surround it with double quotes.
