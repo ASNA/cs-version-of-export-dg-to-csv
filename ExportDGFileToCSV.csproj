@@ -9,9 +9,10 @@
     <AppDesignerFolder>Properties</AppDesignerFolder>
     <RootNamespace>ExportDGFileToCSV</RootNamespace>
     <AssemblyName>ExportDGFileToCSV</AssemblyName>
-    <TargetFrameworkVersion>v4.5.2</TargetFrameworkVersion>
+    <TargetFrameworkVersion>v4.6.1</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
     <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
+    <TargetFrameworkProfile />
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
     <PlatformTarget>AnyCPU</PlatformTarget>
@@ -33,6 +34,9 @@
     <WarningLevel>4</WarningLevel>
   </PropertyGroup>
   <ItemGroup>
+    <Reference Include="ArgyBargy">
+      <HintPath>..\..\TestArgyBargySpike\ArgyBargy\bin\Debug\ArgyBargy.dll</HintPath>
+    </Reference>
     <Reference Include="ASNA.DataGate.Client, Version=14.0.27.0, Culture=neutral, PublicKeyToken=78aac8f1f3f86b73, processorArchitecture=MSIL">
       <SpecificVersion>False</SpecificVersion>
       <HintPath>..\..\..\..\AVR\Other\ASNA.DataGateHelper\ASNA.DataGateHelper\bin\Debug\ASNA.DataGate.Client.dll</HintPath>

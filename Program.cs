@@ -3,6 +3,7 @@ using System.Linq;
 using System.Text;
 using ASNA.DataGateHelper;
 using System.Reflection;
+using CommandLineUtility;
 
 namespace ExportDGFileToCSV
 {
@@ -13,77 +14,32 @@ namespace ExportDGFileToCSV
         enum ExitCode : int
         {
             Success = 0,
-            Failure = 1,
-            ValueMustBeANumber = 3,
-            ValueNotProvided = 4,
-            FlagNotPresent = 5,
-            UndeterminedError = 99
+            Failure = 1
         }
 
         static int Main(string[] args)
         {
-            int result;
-            result = CodeRunner(args);
-
-            Console.WriteLine("Press any key to continue...");
-            Console.ReadKey();
-
-            return result;
+            return CodeRunner(args);
         }
 
         static int CodeRunner(string[] args)
         {
-            const int DATABASENAME = 0;
-            const int LIBRARYNAME = 1;
-            const int FILENAME = 2;
-            const int OUTPUT_PATH = 3;
-            const int MIN_ARGS = 3;
-
-            if (args.Length < MIN_ARGS || args.Contains("-help")) {
-                showHelp();
-                return (int)ExitCode.Failure;
-            }
-
-            ExitCode result;
-
+            
             ExporterArgs exportArgs = new ExporterArgs();
-            exportArgs.DatabaseName = args[DATABASENAME];
-            exportArgs.LibraryName = args[LIBRARYNAME];
-            exportArgs.FileName = args[FILENAME];
+            CmdArgManager cam = new CmdArgManager(exportArgs, args, "Export a DataGate file to CSV with C#");
 
-            exportArgs.OutputDirectory = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
-            // Does args[OUTPUT_PATH] specifies an existing output directory. 
-            if (args.Length > MIN_ARGS && !args[OUTPUT_PATH].StartsWith("-")) {
-                if (args[OUTPUT_PATH].EndsWith(@"\")) {
-                     args[OUTPUT_PATH] = Utils.RemoveLastCharacter(args[OUTPUT_PATH]);
-                }
-
-                if (System.IO.Directory.Exists(args[OUTPUT_PATH])) {
-                    exportArgs.OutputDirectory = args[OUTPUT_PATH];
-                }
-                else {
-                    Console.ForegroundColor = ConsoleColor.Red;
-                    Console.WriteLine("{0} output directory not found", args[OUTPUT_PATH]);
-                    Console.ForegroundColor = OriginalForegroundColor;
-                    return (int)ExitCode.Failure;
-                }
-            }
-
-            exportArgs.IncludeHeadingFlag = Array.IndexOf(args, "-noheadings") == -1;
-            exportArgs.ShowProgressFlag = Array.IndexOf(args, "-showprogress") > -1;
-            exportArgs.TabDelimiterFlag = Array.IndexOf(args, "-tabdelimiter") > -1;
-            exportArgs.WriteSchemaFileFlag = Array.IndexOf(args, "-writeschemafile") > -1;
-
-            result = getFlagValue(args, exportArgs, "BlockingFactor", "-blockingfactor");  
-            if (result != ExitCode.Success && result != ExitCode.FlagNotPresent) {
-                ShowCmdLineParseError(result, "-blockingfactor");
-                return (int)ExitCode.Failure;
-            }
-            if (exportArgs.BlockingFactor != ExporterArgs.DEFAULT_BLOCKING_FACTOR)
+            CmdArgManager.ExitCode result = cam.ParseArgs();
+            if (result == CmdArgManager.ExitCode.HelpShown)
             {
-                Console.ForegroundColor = ConsoleColor.Green;
-                Console.WriteLine("BlockingFactor overridden to {0}", exportArgs.BlockingFactor);
-                Console.ForegroundColor = OriginalForegroundColor;
+                return (int)ExitCode.Success;
+            }
+
+            if (result != CmdArgManager.ExitCode.Success)
+            {
+                Console.WriteLine("**ERROR**");
+                Console.WriteLine(cam.ErrorMessage);
+                return (int)ExitCode.Failure;
+
             }
 
             Exporter export = new Exporter(exportArgs);
@@ -94,6 +50,13 @@ namespace ExportDGFileToCSV
                 Console.ForegroundColor = ConsoleColor.Green;
                 Console.WriteLine("Time to export: {0:#,###}ms {1:#,##0}min", ElapsedMilliseconds, ElapsedMilliseconds / 60000);
                 Console.ForegroundColor = OriginalForegroundColor;
+
+                if (exportArgs.Pause)
+                {
+                    Console.WriteLine("Press any key to continue...");
+                    Console.ReadKey();
+                }
+
                 return (int)ExitCode.Success;
             }
             catch (System.Exception ex)
@@ -103,101 +66,6 @@ namespace ExportDGFileToCSV
                 Console.ForegroundColor = OriginalForegroundColor;
                 return (int)ExitCode.Failure;
             }
-        }
-
-        static ExitCode getFlagValue(string[] args, ExporterArgs exportArgs, string propertyName, string flagName)
-        {
-            int flagIndex = Array.IndexOf(args, flagName);
-            int valueIndex = flagIndex + 1;
-
-            if (Array.IndexOf(args, flagName) == -1) return ExitCode.FlagNotPresent;
-            if (valueIndex >= args.Length) return ExitCode.ValueNotProvided;
-            if (args[valueIndex].StartsWith("-")) return ExitCode.ValueNotProvided;
-
-            string flagValue = args[valueIndex];
-            Type type = exportArgs.GetType();
-
-            PropertyInfo prop = type.GetProperty(propertyName);
-            if (prop == null) throw new System.ArgumentException("Property {0} doesn't exist in ExporterArgs", propertyName);
-
-            switch (prop.PropertyType.Name)
-            {
-                case "Int32":
-                    if (flagValue.All(char.IsDigit))
-                    {
-                        prop.SetValue(exportArgs, Int32.Parse(flagValue), null);
-                        return ExitCode.Success;
-                    }
-                    return ExitCode.ValueMustBeANumber;
-
-                case "String":
-                    prop.SetValue(exportArgs, Int32.Parse(flagValue), null);
-                    return ExitCode.Success;
-            }
-
-            return ExitCode.UndeterminedError;
-        }
-
-        static void ShowCmdLineParseError(ExitCode result, string flagName)
-        {
-            Console.ForegroundColor = ConsoleColor.Red;
-
-            switch (result)
-            {
-                case ExitCode.FlagNotPresent:
-                    Console.WriteLine("{0} flag not present.", flagName);
-                    break;
-                case ExitCode.UndeterminedError:
-                    Console.WriteLine("An undetermined error occurred parsing the {0} flag.", flagName);
-                    break;
-                case ExitCode.ValueMustBeANumber:
-                    Console.WriteLine("The value for the {0} flag must be a number", flagName);
-                    break;
-                case ExitCode.ValueNotProvided:
-                    Console.WriteLine("The value for the {0} flag was not provided", flagName);
-                    break;
-            }
-            Console.ForegroundColor = OriginalForegroundColor;
-
-        }
-
-        static void showHelp()
-        {
-            Console.ForegroundColor = ConsoleColor.Green;
-            Console.WriteLine("Export a DataGate file to either a comma- or tab-separated file.");
-            Console.WriteLine("");
-            Console.WriteLine("Usage:");
-            Console.WriteLine("   exporttocsv <databaseName> <library> <file> <outputPath> -noheadings -showprogress -tabdelimiter -writeschemafile");
-            Console.WriteLine("");
-            Console.WriteLine("Required arguments--must be provided in the order shown");
-            Console.WriteLine("    <databaseName>......ASNA Database Name. If the name includes blanks surround it with double quotes.");
-            Console.WriteLine("    <library>...........Library name.");
-            Console.WriteLine("    <file>..............File name.");
-            Console.WriteLine("");
-            Console.WriteLine("Optional arguments");
-            Console.WriteLine("    <outputPath>........Path to which output files are written. If provided, this must be the fourth");
-            Console.WriteLine("                        argument. The default output path is the current user's 'Documents' folder.");
-            Console.WriteLine("");
-            Console.WriteLine("Optional flags--flags can be provided in any order");
-            Console.WriteLine("    -help...............Show this help.");
-            Console.WriteLine("    -noheadings.........Do not include field names as first row.");
-            Console.WriteLine("    -showprogress.......Show progress as records are exported.");
-            Console.WriteLine("    -tabdelimiter.......Delimit fields with a tab character instead of a comma.");
-            Console.WriteLine("    -writeschemafile....Write schema file which shows column data types.");
-            Console.WriteLine("    -blockingfactor.....Record blocking factor. Setting this to a value between 500-1000 _may_ help performance.");
-            Console.WriteLine("                        A values higher than 1000 will likely impede performance. The default value is 500.");
-            Console.WriteLine("    Any other flags entered are ignored.");
-            Console.WriteLine("");
-            Console.WriteLine("Output file is written to the target folder in the format:");
-            Console.WriteLine("    <databaseName>-<library>-<file>.txt");
-            Console.WriteLine("");
-            Console.WriteLine("Schema file is written to the target folder in the format:");
-            Console.WriteLine("    <databaseName>-<library>-<file>.schema.txt");
-            Console.WriteLine("");
-            Console.WriteLine("In the output file, the Database Name has any special characters removed to make it work as part of a Windows filename.");
-            Console.WriteLine("For example, '*PUBLIC/DG Net Local' gets translated to 'public_dg_net_local' in the output file name.");
-
-            Console.ForegroundColor = OriginalForegroundColor;
         }
     }
 
@@ -221,7 +89,7 @@ namespace ExportDGFileToCSV
         public int Run()
         {
             ASNA.DataGate.Client.AdgConnection apiDGDB = new ASNA.DataGate.Client.AdgConnection("*Public/DG NET Local");
-            this.dgfr = new ASNA.DataGateHelper.DGFileReader(apiDGDB, this.exportArgs.BlockingFactor);
+            this.dgfr = new ASNA.DataGateHelper.DGFileReader(apiDGDB, this.exportArgs.BlockFactor);
             this.dgfr.AfterRowRead += OnAfterRowRead;
 
             this.dgfr.ReadEntireFile("examples", "cmastnew");
@@ -229,10 +97,12 @@ namespace ExportDGFileToCSV
 
             Console.ForegroundColor = ConsoleColor.Green;
 
-            Console.WriteLine(String.Format(@"Exported {0}\{1}\{2}", 
-                        this.exportArgs.DatabaseName,
-                        this.exportArgs.LibraryName,
-                        this.exportArgs.FileName));
+            //Console.WriteLine(String.Format(@"Exported to: {0}", this.exportArgs.OutputFileName));
+
+            Console.WriteLine(String.Format(@"Exported from Database Name{0}: {1}\{2}",
+                                    this.exportArgs.DatabaseName,
+                                    this.exportArgs.LibraryName,
+                                    this.exportArgs.FileName));
 
             Console.WriteLine("{0} created on {1}.", this.exportArgs.OutputFileName, DateTime.Now.ToString("f"));
             Console.WriteLine("{0:#,000} rows written.", dgfr.TotalRowsCounter);
@@ -251,11 +121,11 @@ namespace ExportDGFileToCSV
             {
                 this.exportArgs.OpenOutfileStream();
 
-                if (this.exportArgs.WriteSchemaFileFlag)
+                if (this.exportArgs.WriteSchemafileFlag)
                 {
                     writeSchemaFile(e.FieldNames, e.FieldTypes);
                 }
-                if (this.exportArgs.IncludeHeadingFlag)
+                if (! this.exportArgs.IncludeHeadingFlag)
                 {
                     writeColumnHeadings(e.FieldNames);
                 }
@@ -326,18 +196,41 @@ namespace ExportDGFileToCSV
 
     public class ExporterArgs
     {
-        public const int DEFAULT_BLOCKING_FACTOR = 500;
+        const bool REQUIRED = true;
+        const bool OPTIONAL = false;
+        const int DEFAULT_BLOCKING_FACTOR = 500;
 
+        [CmdArg("--databasename", "-d", REQUIRED, "Database name")]
         public string DatabaseName { get; set; }
+
+        [CmdArg("--library", "-l", REQUIRED, "Library")]
         public string LibraryName { get; set; }
+
+        [CmdArg("--file", "-f", REQUIRED, "File name")]
         public string FileName { get; set; }
-        public string OutputDirectory { get; set; }
-        public bool IncludeHeadingFlag { get; set; }
-        public bool ShowProgressFlag { get; set; }
-        public bool TabDelimiterFlag { get; set; }
-        public bool WriteSchemaFileFlag { get; set; }
-        public int BlockingFactor { get; set; }
-        public string LibraryNameForOutputFile { get; set; }
+
+        [CmdArg("--outputpath", "-p", OPTIONAL, "Output path")]
+        public string OutputDirectory { get; set; } = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+
+        [CmdArg("--blockfactor", "-b", OPTIONAL, "Recording blocking factor")]
+        public int BlockFactor { get; set; } = 500;
+
+        [CmdArg("--noheadings", "-nh", OPTIONAL, "Do not include headings row")]
+        public bool IncludeHeadingFlag { get; set; } = false;
+
+        [CmdArg("--tabdelimiter", "-t", OPTIONAL, "Use tab as field delimiter")]
+        public bool TabDelimiterFlag { get; set; } = false;
+
+        [CmdArg("--showprogress", "-x", OPTIONAL, "Show export progress")]
+        public bool ShowProgressFlag { get; set; } = false;
+
+        [CmdArg("--writeschemafile", "-s", OPTIONAL, "Write schema file")]
+        public bool WriteSchemafileFlag { get; set; } = false;
+        
+        [CmdArg("--pause", "-ps", OPTIONAL, "Pause screen after export--usually for debugging purposes")]
+        public bool Pause { get; set; } = false;
+
+        public string LibraryNameForOutputFile { get; set; } 
         public string OutputFileName { get; set; }
         public string OutputSchemaFileName { get; set; }
         public string Delimiter { get; set; }
@@ -346,7 +239,6 @@ namespace ExportDGFileToCSV
 
         public ExporterArgs()
         {
-            this.BlockingFactor = DEFAULT_BLOCKING_FACTOR;
         }
         public void TransformExportArgs()
         {
@@ -376,8 +268,7 @@ namespace ExportDGFileToCSV
                                       this.LibraryNameForOutputFile,
                                       this.FileName);
         }
-
-
+        
         public void OpenOutfileStream()
         {
             this.outfileStream = new System.IO.StreamWriter(this.OutputFileName);
