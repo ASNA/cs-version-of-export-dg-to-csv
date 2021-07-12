@@ -25,8 +25,8 @@ namespace ExportDGFileToCSV
             int result;
             result = CodeRunner(args);
 
-            //Console.WriteLine("Press any key to continue...");
-            //Console.ReadKey();
+            Console.WriteLine("Press any key to continue...");
+            Console.ReadKey();
 
             return result;
         }
@@ -221,8 +221,8 @@ namespace ExportDGFileToCSV
         public int Run()
         {
             ASNA.DataGate.Client.AdgConnection apiDGDB = new ASNA.DataGate.Client.AdgConnection("*Public/DG NET Local");
-            dgfr = new ASNA.DataGateHelper.DGFileReader(apiDGDB, this.exportArgs.BlockingFactor);
-            dgfr.AfterRowRead += OnAfterRowRead;
+            this.dgfr = new ASNA.DataGateHelper.DGFileReader(apiDGDB, this.exportArgs.BlockingFactor);
+            this.dgfr.AfterRowRead += OnAfterRowRead;
 
             this.dgfr.ReadEntireFile("examples", "cmastnew");
             this.exportArgs.CloseOutfileStream();
